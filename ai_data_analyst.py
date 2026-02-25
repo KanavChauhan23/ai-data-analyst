@@ -56,6 +56,8 @@ section[data-testid="stSidebar"] {
     background: rgba(3,5,12,0.99) !important;
     border-right: 1px solid rgba(0,229,255,0.1) !important;
 }
+section[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
+section[data-testid="stSidebar"] .block-container { padding: 0 0.5rem 2rem !important; }
 
 /* Hero */
 .hero { text-align:center; padding:1.8rem 1rem 0.8rem; animation:float-in .7s ease forwards; }
@@ -74,7 +76,7 @@ section[data-testid="stSidebar"] {
     background-size:200% auto; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     animation:data-stream 4s linear infinite; margin-bottom:.5rem;
 }
-.hero-sub { color:var(--text-mid); font-size:.9rem; font-weight:300; max-width:520px; margin:0 auto 1.2rem; line-height:1.65; }
+.hero-sub { color:var(--text-mid); font-size:.9rem; font-weight:300; max-width:520px; margin:0 auto 1.2rem; line-height:1.65; text-align:center; }
 .hero-line { height:1px; background:linear-gradient(90deg,transparent,rgba(0,229,255,.4),rgba(168,85,247,.4),transparent); margin-bottom:1.5rem; }
 
 /* Section header */
