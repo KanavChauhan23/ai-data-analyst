@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import duckdb
+
 import json
 import re
 import io
@@ -377,14 +377,112 @@ def profile_df(df):
     return out
 
 def register_duckdb(df):
-    con = duckdb.connect()
-    con.register("data", df)
-    return con
+    # Using pandas as SQL backend via pandasql-style approach
+    return {"data": df}
 
 def run_sql(con, sql):
+    """Execute SQL-like queries using pandas"""
     try:
-        result = con.execute(sql).df()
-        return result, None
+        import re
+        df = con["data"]
+        sql_clean = sql.strip().rstrip(";")
+        
+        # Simple SQL parser for common patterns
+        sql_upper = sql_clean.upper()
+        
+        # SELECT * FROM data LIMIT n
+        limit_match = re.search(r'LIMIT\s+(\d+)', sql_clean, re.IGNORECASE)
+        limit = int(limit_match.group(1)) if limit_match else None
+        
+        # COUNT(*)
+        if re.search(r'SELECT\s+COUNT\(\*\)', sql_clean, re.IGNORECASE) and 'GROUP BY' not in sql_upper:
+            result = pd.DataFrame({"count": [len(df)]})
+            return result, None
+        
+        # SELECT * FROM data
+        if re.match(r'SELECT\s+\*\s+FROM\s+data', sql_clean, re.IGNORECASE) and 'WHERE' not in sql_upper and 'GROUP BY' not in sql_upper and 'ORDER BY' not in sql_upper:
+            result = df.head(limit) if limit else df
+            return result, None
+        
+        # ORDER BY col [DESC]
+        order_match = re.search(r'ORDER BY\s+(\w+)(\s+DESC)?', sql_clean, re.IGNORECASE)
+        if order_match and 'GROUP BY' not in sql_upper and 'WHERE' not in sql_upper:
+            col = order_match.group(1)
+            desc = bool(order_match.group(2))
+            if col in df.columns:
+                result = df.sort_values(col, ascending=not desc)
+                result = result.head(limit) if limit else result
+                return result, None
+        
+        # GROUP BY aggregation
+        grp_match = re.search(r'GROUP BY\s+(\w+)', sql_clean, re.IGNORECASE)
+        if grp_match:
+            grp_col = grp_match.group(1)
+            if grp_col in df.columns:
+                # Try to detect aggregation
+                agg_match = re.search(r'(SUM|AVG|COUNT|MAX|MIN)\((\w+|\*)\)', sql_clean, re.IGNORECASE)
+                if agg_match:
+                    func = agg_match.group(1).lower()
+                    agg_col = agg_match.group(2)
+                    if func == "count":
+                        result = df.groupby(grp_col).size().reset_index(name="count")
+                    elif agg_col in df.columns:
+                        result = df.groupby(grp_col)[agg_col].agg(func).reset_index()
+                    else:
+                        result = df.groupby(grp_col).size().reset_index(name="count")
+                    result = result.sort_values(result.columns[-1], ascending=False)
+                    result = result.head(limit) if limit else result
+                    return result, None
+        
+        # WHERE filter
+        where_match = re.search(r'WHERE\s+(.+?)(?:ORDER BY|GROUP BY|LIMIT|$)', sql_clean, re.IGNORECASE)
+        if where_match and 'GROUP BY' not in sql_upper:
+            condition = where_match.group(1).strip()
+            try:
+                result = df.query(condition)
+                if order_match:
+                    col = order_match.group(1)
+                    desc = bool(order_match.group(2))
+                    if col in df.columns:
+                        result = result.sort_values(col, ascending=not desc)
+                result = result.head(limit) if limit else result
+                return result, None
+            except:
+                pass
+        
+        # Null counts per column (UNION ALL pattern)
+        if 'nulls' in sql_clean.lower() or 'isnull' in sql_clean.lower() or 'is null' in sql_upper:
+            null_data = [(col, int(df[col].isna().sum())) for col in df.columns]
+            result = pd.DataFrame(null_data, columns=["column", "null_count"])
+            result = result[result["null_count"] > 0].sort_values("null_count", ascending=False)
+            return result, None
+        
+        # Duplicate rows
+        if 'duplicat' in sql_clean.lower():
+            dups = df[df.duplicated()]
+            return dups.head(limit or 100), None
+        
+        # Numeric stats
+        if 'min(' in sql_clean.lower() or 'max(' in sql_clean.lower() or 'avg(' in sql_clean.lower():
+            num_cols = df.select_dtypes(include="number").columns.tolist()
+            if num_cols:
+                stats = df[num_cols].describe().T[["min","max","mean","std"]].round(3)
+                return stats.reset_index().rename(columns={"index":"column"}), None
+        
+        # Distinct counts
+        if 'distinct' in sql_clean.lower() or 'unique' in sql_clean.lower():
+            uniq_data = [(col, int(df[col].nunique())) for col in df.columns]
+            result = pd.DataFrame(uniq_data, columns=["column", "unique_values"])
+            return result.sort_values("unique_values", ascending=False), None
+        
+        # Fallback: describe
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        if num_cols:
+            result = df[num_cols].describe().round(3)
+            return result, None
+        
+        return df.head(limit or 25), None
+        
     except Exception as e:
         return None, str(e)
 
@@ -498,7 +596,7 @@ with st.sidebar:
 
     st.markdown('<div class="sb-sec">System Status</div>', unsafe_allow_html=True)
     if groq_key:
-        for l, v in [("🟢 AI Engine","ONLINE"),("⚡ Model","LLaMA 3.3 70B"),("🗄️ Database","DuckDB")]:
+        for l, v in [("🟢 AI Engine","ONLINE"),("⚡ Model","LLaMA 3.3 70B"),("🗄️ Engine","Pandas + SQL")]:
             st.markdown(f'<div class="sb-row"><span class="sb-row-label">{l}</span><span class="sb-row-val">{v}</span></div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="sb-row" style="border-color:rgba(255,51,102,0.3)"><span class="sb-row-label">🔴 AI Engine</span><span class="sb-row-val" style="color:#FF3366">OFFLINE</span></div>', unsafe_allow_html=True)
