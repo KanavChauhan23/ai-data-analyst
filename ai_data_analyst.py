@@ -76,7 +76,7 @@ section[data-testid="stSidebar"] .block-container { padding: 0 0.5rem 2rem !impo
     background-size:200% auto; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     animation:data-stream 4s linear infinite; margin-bottom:.5rem;
 }
-.hero-sub { color:var(--text-mid); font-size:.9rem; font-weight:300; max-width:520px; margin:0 auto 1.2rem; line-height:1.65; text-align:center; }
+.hero-sub { color:var(--text-mid); font-size:.9rem; font-weight:300; max-width:100%; margin:0 auto 1.2rem; line-height:1.65; text-align:center; display:block; }
 .hero-line { height:1px; background:linear-gradient(90deg,transparent,rgba(0,229,255,.4),rgba(168,85,247,.4),transparent); margin-bottom:1.5rem; }
 
 /* Section header */
@@ -180,8 +180,20 @@ def load_file(f):
     try:
         if f.name.endswith(".csv"):
             df = pd.read_csv(f, na_values=["NA","N/A","","missing"])
-        elif f.name.endswith((".xlsx",".xls")):
-            df = pd.read_excel(f, na_values=["NA","N/A","","missing"])
+        elif f.name.endswith(".xlsx"):
+            df = pd.read_excel(f, na_values=["NA","N/A","","missing"], engine="openpyxl")
+        elif f.name.endswith(".xls"):
+            try:
+                import xlrd
+                df = pd.read_excel(f, na_values=["NA","N/A","","missing"], engine="xlrd")
+            except ImportError:
+                # xlrd not available - read raw bytes and try openpyxl fallback
+                try:
+                    f.seek(0)
+                    df = pd.read_excel(f, na_values=["NA","N/A","","missing"])
+                except Exception:
+                    st.error("⚠️ Old .xls format not supported. Please open your file in Excel and **Save As → .xlsx** then re-upload.")
+                    return None
         elif f.name.endswith(".json"):
             df = pd.read_json(f)
         else:
@@ -366,7 +378,7 @@ with st.sidebar:
 st.markdown("""<div class="hero">
     <div class="hero-tag">⚡ POWERED BY GROQ AI · LLAMA 3.3 70B · REAL-TIME ANALYSIS</div>
     <h1 class="hero-title">NOVA DATA ANALYST</h1>
-    <p class="hero-sub">Upload any dataset. Ask anything in plain English. Get instant analysis, charts & AI insights.</p>
+    <div class="hero-sub">Upload any dataset. Ask anything in plain English.<br>Get instant analysis, charts &amp; AI insights.</div>
 </div><div class="hero-line"></div>""", unsafe_allow_html=True)
 
 if not groq_key:
