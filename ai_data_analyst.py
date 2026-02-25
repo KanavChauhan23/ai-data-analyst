@@ -7,7 +7,7 @@ import re
 import io
 import tempfile
 import csv
-from openai import OpenAI
+import requests
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -490,13 +490,15 @@ def chip(text, cls="ce"):
     return f'<span class="chip {cls}">{text}</span>'
 
 def safe_groq_call(client, messages, max_tokens=2000):
-    r = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=messages,
-        max_tokens=max_tokens,
-        temperature=0.4
+    resp = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+        json={"model": "llama-3.3-70b-versatile", "messages": messages,
+              "max_tokens": max_tokens, "temperature": 0.4},
+        timeout=60
     )
-    return r.choices[0].message.content
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 def extract_sql(text):
     """Extract SQL from response"""
@@ -642,7 +644,8 @@ if not groq_key:
     st.error("⚠️ GROQ_API_KEY missing — add it in Streamlit Cloud → Settings → Secrets as: GROQ_API_KEY = \"gsk_...\"")
     st.stop()
 
-client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+# Groq client via requests (no openai package needed)
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 # ─── Upload Section ────────────────────────────────────────────────────────────
