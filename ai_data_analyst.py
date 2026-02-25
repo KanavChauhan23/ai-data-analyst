@@ -457,13 +457,9 @@ if st.session_state.df is not None:
         if sort_col != "None": disp = disp.sort_values(sort_col, ascending=sort_ord=="Ascending")
         if n_rows != "All": disp = disp.head(int(n_rows))
         st.dataframe(disp, use_container_width=True, height=380)
-        dl1,dl2,_ = st.columns([1,1,2])
+        dl1,_ = st.columns([1,3])
         with dl1:
-            st.download_button("⬇️ CSV", df.to_csv(index=False).encode(), f"data_export.csv","text/csv",use_container_width=True)
-        with dl2:
-            buf = io.BytesIO()
-            df.to_excel(buf, index=False, engine="openpyxl")
-            st.download_button("⬇️ Excel", buf.getvalue(), "data_export.xlsx", use_container_width=True)
+            st.download_button("⬇️ Download CSV", df.to_csv(index=False).encode(), "data_export.csv", "text/csv", use_container_width=True)
 
     # ── Tab 2 ──────────────────────────────────────────────────────────────────
     with t2:
