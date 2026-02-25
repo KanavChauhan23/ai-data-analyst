@@ -301,7 +301,8 @@ def auto_insights(df, prof):
                 for j in range(i+1, min(len(nc), 8)):
                     v = corr.iloc[i,j]
                     if abs(v) > 0.75:
-                        insights.append(("🔗 Correlation", f"<b>{nc[i]}</b> & <b>{nc[j]}</b> strongly {'positively' if v>0 else 'negatively'} correlated (r={round(v,3)})."))
+                        insights.append(("🔗 Correlation", f"<b>{nc[i]}</b> & <b>{nc[j]}</b> strongly correlated (r={round(v,3)})."))
+        except: pass
     return insights[:6]
 
 def chip(text, cls="ce"): return f'<span class="chip {cls}">{text}</span>'
