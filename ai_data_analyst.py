@@ -1,4 +1,20 @@
 import streamlit as st
+import subprocess, sys
+
+def install(pkg):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "-q"])
+
+try:
+    import openpyxl
+except ImportError:
+    install("openpyxl")
+    import openpyxl
+
+try:
+    import xlrd
+except ImportError:
+    install("xlrd==2.0.1")
+
 import pandas as pd
 import numpy as np
 import requests
