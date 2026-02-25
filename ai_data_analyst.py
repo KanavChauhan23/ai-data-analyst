@@ -1,20 +1,4 @@
 import streamlit as st
-import subprocess, sys
-
-def install(pkg):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "-q"])
-
-try:
-    import openpyxl
-except ImportError:
-    install("openpyxl")
-    import openpyxl
-
-try:
-    import xlrd
-except ImportError:
-    install("xlrd==2.0.1")
-
 import pandas as pd
 import numpy as np
 import requests
@@ -196,20 +180,16 @@ def load_file(f):
     try:
         if f.name.endswith(".csv"):
             df = pd.read_csv(f, na_values=["NA","N/A","","missing"])
-        elif f.name.endswith(".xlsx"):
-            df = pd.read_excel(f, na_values=["NA","N/A","","missing"], engine="openpyxl")
-        elif f.name.endswith(".xls"):
+        elif f.name.endswith((".xlsx", ".xls")):
             try:
-                import xlrd
-                df = pd.read_excel(f, na_values=["NA","N/A","","missing"], engine="xlrd")
-            except ImportError:
-                # xlrd not available - read raw bytes and try openpyxl fallback
-                try:
-                    f.seek(0)
-                    df = pd.read_excel(f, na_values=["NA","N/A","","missing"])
-                except Exception:
-                    st.error("⚠️ Old .xls format not supported. Please open your file in Excel and **Save As → .xlsx** then re-upload.")
-                    return None
+                df = pd.read_excel(f, na_values=["NA","N/A","","missing"])
+            except Exception as ex:
+                err = str(ex).lower()
+                if "openpyxl" in err or "xlrd" in err:
+                    st.error("⚠️ Excel engine not available on this server. Please save your file as **CSV** and re-upload: File → Save As → CSV (Comma delimited).")
+                else:
+                    st.error(f"Excel load error: {ex}")
+                return None
         elif f.name.endswith(".json"):
             df = pd.read_json(f)
         else:
