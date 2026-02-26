@@ -220,22 +220,51 @@ def groq_call(api_key, messages, max_tokens=2000):
 # ─── Data Helpers ──────────────────────────────────────────────────────────────
 def load_file(f):
     try:
-        if f.name.endswith(".csv"):
-            df = pd.read_csv(f, na_values=["NA","N/A","","missing"])
-        elif f.name.endswith((".xlsx", ".xls")):
+        fname = f.name.lower()
+        raw = f.read()
+        buf = io.BytesIO(raw)
+
+        if fname.endswith(".csv"):
+            # Try multiple encodings
+            for enc in ["utf-8", "latin-1", "cp1252"]:
+                try:
+                    buf.seek(0)
+                    df = pd.read_csv(buf, na_values=["NA","N/A","","missing"], encoding=enc)
+                    break
+                except UnicodeDecodeError:
+                    continue
+
+        elif fname.endswith(".xlsx"):
             try:
-                df = pd.read_excel(f, na_values=["NA","N/A","","missing"])
+                buf.seek(0)
+                df = pd.read_excel(buf, engine="openpyxl", na_values=["NA","N/A","","missing"])
             except Exception as ex:
-                err = str(ex).lower()
-                if "openpyxl" in err or "xlrd" in err:
-                    st.error("⚠️ Excel engine not available on this server. Please save your file as **CSV** and re-upload: File → Save As → CSV (Comma delimited).")
-                else:
-                    st.error(f"Excel load error: {ex}")
+                st.error(f"XLSX error: {ex}. Try saving as CSV.")
                 return None
-        elif f.name.endswith(".json"):
-            df = pd.read_json(f)
+
+        elif fname.endswith(".xls"):
+            try:
+                buf.seek(0)
+                df = pd.read_excel(buf, engine="xlrd", na_values=["NA","N/A","","missing"])
+            except Exception as ex:
+                st.error(f"XLS error: {ex}. Try saving as CSV.")
+                return None
+
+        elif fname.endswith(".json"):
+            try:
+                buf.seek(0)
+                df = pd.read_json(buf)
+            except Exception as ex:
+                # Try as JSON lines
+                try:
+                    buf.seek(0)
+                    df = pd.read_json(buf, lines=True)
+                except:
+                    st.error(f"JSON error: {ex}")
+                    return None
+
         else:
-            st.error("Unsupported format. Use CSV, Excel or JSON.")
+            st.error("Unsupported format. Upload CSV, XLSX, XLS, or JSON.")
             return None
         for col in df.columns:
             if any(k in col.lower() for k in ["date","time","dt"]):
