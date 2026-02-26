@@ -48,6 +48,34 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.3); border-radius: 4px; }
 
+/* File uploader - dark bg, visible text and button */
+[data-testid="stFileUploader"] {
+    background: rgba(8,12,28,0.95) !important;
+    border: 1px solid rgba(0,229,255,0.25) !important;
+    border-radius: 10px !important;
+}
+[data-testid="stFileUploader"] section {
+    background: rgba(8,12,28,0.95) !important;
+    border: 1px dashed rgba(0,229,255,0.3) !important;
+    border-radius: 8px !important;
+}
+[data-testid="stFileUploader"] section > div {
+    background: transparent !important;
+}
+[data-testid="stFileUploader"] span,
+[data-testid="stFileUploader"] p,
+[data-testid="stFileUploader"] small {
+    color: #7986A3 !important;
+}
+[data-testid="stFileUploader"] button {
+    background: rgba(0,229,255,0.12) !important;
+    border: 1px solid rgba(0,229,255,0.4) !important;
+    color: #00E5FF !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+}
+[data-testid="stFileUploaderFileName"] { color: #EEF2FF !important; }
+
 @keyframes data-stream { 0%{background-position:0% 50%} 100%{background-position:200% 50%} }
 @keyframes pulse-glow  { 0%,100%{opacity:.5} 50%{opacity:1} }
 @keyframes float-in    { 0%{transform:translateY(10px);opacity:0} 100%{transform:translateY(0);opacity:1} }
@@ -146,6 +174,20 @@ section[data-testid="stSidebar"] .block-container { padding: 0 0.5rem 2rem !impo
 .stSelectbox > div > div { background:rgba(8,12,28,.95) !important; border:1px solid rgba(0,229,255,.22) !important; border-radius:8px !important; color:#EEF2FF !important; }
 .stButton > button { background:linear-gradient(135deg,rgba(0,229,255,.14),rgba(168,85,247,.1)) !important; border:1px solid rgba(0,229,255,.4) !important; color:#00E5FF !important; font-family:'Exo 2',sans-serif !important; font-size:.75rem !important; font-weight:700 !important; letter-spacing:.15em !important; border-radius:8px !important; padding:.6rem 1.2rem !important; transition:all .25s !important; width:100% !important; }
 .stButton > button:hover { background:linear-gradient(135deg,rgba(0,229,255,.26),rgba(168,85,247,.2)) !important; box-shadow:0 0 20px rgba(0,229,255,.22) !important; transform:translateY(-1px) !important; }
+/* Download button override */
+[data-testid="stDownloadButton"] > button {
+    background: linear-gradient(135deg,rgba(0,229,255,.14),rgba(0,255,136,.08)) !important;
+    border: 1px solid rgba(0,229,255,.4) !important;
+    color: #00E5FF !important;
+    font-family: 'Exo 2', sans-serif !important;
+    font-size: .75rem !important; font-weight: 700 !important;
+    letter-spacing: .12em !important; border-radius: 8px !important;
+    width: 100% !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+    background: linear-gradient(135deg,rgba(0,229,255,.25),rgba(0,255,136,.15)) !important;
+    box-shadow: 0 0 18px rgba(0,229,255,.22) !important;
+}
 div[data-testid="stForm"] button { color:#00E5FF !important; background:rgba(0,229,255,.1) !important; border:1px solid rgba(0,229,255,.4) !important; }
 label, .stSelectbox label, .stTextInput label, .stTextArea label { color:#7986A3 !important; font-family:'Space Mono',monospace !important; font-size:.62rem !important; letter-spacing:.14em !important; text-transform:uppercase !important; }
 .stTabs [data-baseweb="tab-list"] { background:rgba(255,255,255,.02) !important; border-radius:10px !important; padding:4px !important; gap:3px !important; }
@@ -296,8 +338,8 @@ def auto_insights(df, prof):
             insights.append(("⚠️ Missing Data", f"<b>{col}</b> has {n} missing values ({round(n/len(df)*100)}% of rows). Consider imputation or removal."))
     for col in nc[:4]:
         try:
-            sk = df[col].skew()
-            if abs(sk) > 1:
+            sk = float(df[col].skew())
+            if sk and abs(sk) > 1:
                 d = "positively" if sk > 0 else "negatively"
                 insights.append(("📊 Skewed Distribution", f"<b>{col}</b> is {d} skewed (skew={round(sk,2)}). Log transform may help."))
         except: pass
@@ -503,9 +545,12 @@ if st.session_state.df is not None:
                         vc = df[col].value_counts().head(12)
                         st.bar_chart(pd.DataFrame({"count":vc.values}, index=vc.index))
         if len(nc) >= 2:
-            with st.expander("🔗 Numeric Correlation Heatmap", expanded=False):
-                corr = df[nc[:8]].corr().round(3)
-                st.dataframe(corr.style.background_gradient(cmap="Blues"), use_container_width=True)
+            with st.expander("🔗 Numeric Correlation Matrix", expanded=False):
+                try:
+                    corr = df[nc[:8]].corr().round(3)
+                    st.dataframe(corr, use_container_width=True)
+                except Exception as e:
+                    st.info(f"Correlation unavailable: {e}")
 
     # ── Tab 3 ──────────────────────────────────────────────────────────────────
     with t3:
@@ -535,8 +580,10 @@ if st.session_state.df is not None:
                     pm3.metric("Mean", round(info["mean"],3))
                     pm4.metric("Std", round(info["std"],3))
                     try:
-                        bins = pd.cut(df[col].dropna(), bins=15).value_counts().sort_index()
-                        st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
+                        col_data = df[col].dropna()
+                        if len(col_data) > 0:
+                            bins = pd.cut(col_data, bins=min(15, col_data.nunique())).value_counts().sort_index()
+                            st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
                     except: pass
                 else:
                     vc = df[col].value_counts().head(8)
