@@ -234,20 +234,35 @@ def load_file(f):
                 except UnicodeDecodeError:
                     continue
 
-        elif fname.endswith(".xlsx"):
-            try:
-                buf.seek(0)
-                df = pd.read_excel(buf, engine="openpyxl", na_values=["NA","N/A","","missing"])
-            except Exception as ex:
-                st.error(f"XLSX error: {ex}. Try saving as CSV.")
-                return None
+        elif fname.endswith((".xlsx", ".xls")):
+            # Try multiple engines in order
+            loaded = False
+            for engine in ["openpyxl", None, "xlrd"]:
+                try:
+                    buf.seek(0)
+                    kwargs = {"na_values": ["NA","N/A","","missing"]}
+                    if engine:
+                        kwargs["engine"] = engine
+                    df = pd.read_excel(buf, **kwargs)
+                    loaded = True
+                    break
+                except Exception:
+                    continue
 
-        elif fname.endswith(".xls"):
-            try:
-                buf.seek(0)
-                df = pd.read_excel(buf, engine="xlrd", na_values=["NA","N/A","","missing"])
-            except Exception as ex:
-                st.error(f"XLS error: {ex}. Try saving as CSV.")
+            if not loaded:
+                # Last resort: try reading as HTML table (many .xls are HTML-based)
+                try:
+                    buf.seek(0)
+                    content = raw.decode("latin-1")
+                    tables = pd.read_html(io.StringIO(content))
+                    if tables:
+                        df = tables[0]
+                        loaded = True
+                except Exception:
+                    pass
+
+            if not loaded:
+                st.error("⚠️ Could not read this Excel file. Please open it in Excel → **Save As → .xlsx** or **CSV** and re-upload.")
                 return None
 
         elif fname.endswith(".json"):
