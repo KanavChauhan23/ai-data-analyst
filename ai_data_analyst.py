@@ -283,6 +283,27 @@ div[data-testid="stForm"] { border:none !important; padding:0 !important; }
 """, unsafe_allow_html=True)
 
 
+# ─── Safe chart helper (Altair-proof) ────────────────────────────────────────
+def safe_chart(df_chart, kind="bar", title=""):
+    """Render chart safely - falls back to styled dataframe if Altair fails."""
+    try:
+        # Sanitize: reset index, rename columns to simple strings
+        df_plot = df_chart.copy().reset_index()
+        df_plot.columns = [str(c).strip()[:40].replace(":","-").replace(".","_").replace("/","-") or f"col_{i}"
+                           for i,c in enumerate(df_plot.columns)]
+        # Drop completely null columns
+        df_plot = df_plot.dropna(axis=1, how="all")
+        if len(df_plot) == 0:
+            st.info("No data to chart.")
+            return
+        if kind == "bar":   safe_chart(df_plot.set_index(df_plot.columns[0], "bar"))
+        elif kind == "line": safe_chart(df_plot.set_index(df_plot.columns[0], "line"))
+        elif kind == "area": safe_chart(df_plot.set_index(df_plot.columns[0], "area"))
+        else:               safe_chart(df_plot.set_index(df_plot.columns[0], "bar"))
+    except Exception:
+        # Fallback: just show as table
+        st.dataframe(df_chart.head(30), use_container_width=True)
+
 # ─── Groq API (pure requests) ──────────────────────────────────────────────────
 def groq_call(api_key, messages, max_tokens=2000):
     r = requests.post(
@@ -651,9 +672,9 @@ if st.session_state.df is not None:
                 else:
                     chart_df = df[[x_col, y_col]].dropna().set_index(x_col)[y_col]
 
-                if chart_type == "Bar":       st.bar_chart(chart_df)
-                elif chart_type == "Line":    st.line_chart(chart_df)
-                elif chart_type == "Area":    st.area_chart(chart_df)
+                if chart_type == "Bar":       safe_chart(chart_df, "bar")
+                elif chart_type == "Line":    safe_chart(chart_df, "line")
+                elif chart_type == "Area":    safe_chart(chart_df, "area")
                 elif chart_type == "Scatter": st.scatter_chart(df[[x_col,y_col]].dropna(), x=x_col, y=y_col)
                 elif chart_type == "Histogram":
                     if y_col != "Count" and y_col in df.columns:
@@ -662,7 +683,7 @@ if st.session_state.df is not None:
                             n_bins = min(20, col_data.nunique())
                             bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
                             hist_df = pd.DataFrame({"count": bins.values}, index=bins.index.astype(str))
-                            st.bar_chart(hist_df)
+                            safe_chart(hist_df, "bar")
                         else:
                             st.info("Not enough numeric data to plot histogram.")
             except Exception as e:
@@ -678,7 +699,7 @@ if st.session_state.df is not None:
                         if len(col_data) >= 2 and col_data.nunique() >= 2:
                             n_bins = min(20, col_data.nunique())
                             bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
-                            st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
+                            safe_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)), "bar")
                         else:
                             st.info("Not enough data to plot.")
                     except Exception:
@@ -691,7 +712,7 @@ if st.session_state.df is not None:
                             vc = df[col].dropna().value_counts().head(12)
                             if len(vc) > 0:
                                 idx = vc.index.astype(str).str[:40].str.replace(r"[^\w\s-]", "", regex=True)
-                                st.bar_chart(pd.DataFrame({"count":vc.values}, index=idx))
+                                safe_chart(pd.DataFrame({"count":vc.values}, index=idx), "bar")
                         except Exception:
                             st.info("Cannot plot this column.")
         if len(nc) >= 2:
@@ -734,12 +755,12 @@ if st.session_state.df is not None:
                         if len(col_data) >= 2 and col_data.nunique() >= 2:
                             n_bins = min(15, max(2, col_data.nunique()))
                             bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
-                            st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
+                            safe_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)), "bar")
                     except: pass
                 else:
                     vc = df[col].value_counts().head(8)
                     if len(vc):
-                        st.bar_chart(pd.DataFrame({"count":vc.values}, index=vc.index.astype(str)))
+                        safe_chart(pd.DataFrame({"count":vc.values}, index=vc.index.astype(str)), "bar")
 
     # ── Tab 4 ──────────────────────────────────────────────────────────────────
     with t4:
@@ -764,7 +785,7 @@ if st.session_state.df is not None:
                 ncr = [c for c in res.columns if pd.api.types.is_numeric_dtype(res[c])]
                 scr = [c for c in res.columns if res[c].dtype=="object"]
                 if scr and ncr and 2 <= len(res) <= 30:
-                    try: st.bar_chart(res.set_index(scr[0])[ncr[0]])
+                    try: safe_chart(res.set_index(scr[0], "bar")[ncr[0]])
                     except: pass
 
         with st.form("chat_form", clear_on_submit=True):
@@ -840,7 +861,7 @@ Rules:
                     ncr = [c for c in res.columns if pd.api.types.is_numeric_dtype(res[c])]
                     scr = [c for c in res.columns if res[c].dtype=="object"]
                     if scr and ncr and 2<=len(res)<=30:
-                        try: st.bar_chart(res.set_index(scr[0])[ncr[0]])
+                        try: safe_chart(res.set_index(scr[0], "bar")[ncr[0]])
                         except: pass
                     st.download_button("⬇️ Download Result", res.to_csv(index=False).encode(),"query_result.csv","text/csv")
 
