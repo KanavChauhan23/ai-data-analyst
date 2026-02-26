@@ -9,7 +9,7 @@
 
 ### ⚡ Ask anything about your data. Get instant AI-powered analysis.
 
-**[🚀 Live Demo → nova-ai-analyst.streamlit.app](https://nova-ai-analyst.streamlit.app)**
+**[Live Nova +](https://nova-ai-analyst.streamlit.app)**
 
 *Developed by **Kanav Chauhan***
 
