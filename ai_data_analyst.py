@@ -462,7 +462,7 @@ def run_query(df, sql):
 
 def auto_insights(df, prof):
     insights = []
-    nc = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    nc = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and df[c].notna().sum() >= 2]
     cc = [c for c in df.columns if df[c].dtype == "object"]
     for col in df.columns:
         n = prof[col]["nulls"]
@@ -561,7 +561,7 @@ st.markdown('<div class="sh"><div class="sh-icon">📂</div><div class="sh-title
 
 up1, up2 = st.columns([3,1])
 with up1:
-    uploaded = st.file_uploader("Upload Dataset", type=["csv","xlsx","json"], label_visibility="collapsed")
+    uploaded = st.file_uploader("Upload Dataset", type=["csv","xlsx","xls","json"], label_visibility="collapsed")
 with up2:
     st.markdown("""<div style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.1);border-radius:10px;padding:.9rem;font-size:.75rem;color:#7986A3;line-height:1.7;margin-top:.1rem;">
     📎 <b style="color:#00E5FF">Formats:</b><br>CSV · Excel · JSON<br><span style="font-size:.65rem;color:#3D4A5C">Max ~200MB</span></div>""", unsafe_allow_html=True)
@@ -657,9 +657,14 @@ if st.session_state.df is not None:
                 elif chart_type == "Scatter": st.scatter_chart(df[[x_col,y_col]].dropna(), x=x_col, y=y_col)
                 elif chart_type == "Histogram":
                     if y_col != "Count" and y_col in df.columns:
-                        bins = pd.cut(df[y_col].dropna(), bins=20).value_counts().sort_index()
-                        hist_df = pd.DataFrame({"count": bins.values}, index=bins.index.astype(str))
-                        st.bar_chart(hist_df)
+                        col_data = df[y_col].dropna()
+                        if len(col_data) >= 2 and col_data.nunique() >= 2:
+                            n_bins = min(20, col_data.nunique())
+                            bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
+                            hist_df = pd.DataFrame({"count": bins.values}, index=bins.index.astype(str))
+                            st.bar_chart(hist_df)
+                        else:
+                            st.info("Not enough numeric data to plot histogram.")
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
@@ -713,8 +718,9 @@ if st.session_state.df is not None:
                     pm4.metric("Std", round(info["std"],3))
                     try:
                         col_data = df[col].dropna()
-                        if len(col_data) > 0:
-                            bins = pd.cut(col_data, bins=min(15, col_data.nunique())).value_counts().sort_index()
+                        if len(col_data) >= 2 and col_data.nunique() >= 2:
+                            n_bins = min(15, max(2, col_data.nunique()))
+                            bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
                             st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
                     except: pass
                 else:
