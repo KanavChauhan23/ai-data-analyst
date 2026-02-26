@@ -5,6 +5,85 @@ import requests
 import re
 import io
 import json
+import zipfile
+import xml.etree.ElementTree as ET
+
+# ─── Zero-dependency XLSX parser ──────────────────────────────────────────────
+def parse_xlsx_native(raw_bytes):
+    """Parse .xlsx using only built-in zipfile + xml — no openpyxl needed."""
+    buf = io.BytesIO(raw_bytes)
+    try:
+        zf = zipfile.ZipFile(buf)
+    except zipfile.BadZipFile:
+        return None, "Not a valid xlsx file"
+
+    # Read shared strings
+    shared_strings = []
+    if "xl/sharedStrings.xml" in zf.namelist():
+        tree = ET.parse(zf.open("xl/sharedStrings.xml"))
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        for si in tree.getroot().findall(".//x:si", ns):
+            t_nodes = si.findall(".//x:t", ns)
+            shared_strings.append("".join(t.text or "" for t in t_nodes))
+
+    # Find first sheet
+    sheet_file = None
+    for name in zf.namelist():
+        if name.startswith("xl/worksheets/sheet") and name.endswith(".xml"):
+            sheet_file = name
+            break
+    if not sheet_file:
+        return None, "No worksheet found"
+
+    # Parse sheet
+    tree = ET.parse(zf.open(sheet_file))
+    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    rows_data = []
+    for row in tree.getroot().findall(".//x:row", ns):
+        row_cells = {}
+        for cell in row.findall("x:c", ns):
+            ref = cell.get("r", "")
+            col_letters = re.sub(r"[0-9]", "", ref)
+            # Convert column letters to index
+            col_idx = 0
+            for ch in col_letters:
+                col_idx = col_idx * 26 + (ord(ch.upper()) - ord("A") + 1)
+            col_idx -= 1
+            v_node = cell.find("x:v", ns)
+            if v_node is None or v_node.text is None:
+                row_cells[col_idx] = ""
+                continue
+            cell_type = cell.get("t", "")
+            if cell_type == "s":
+                idx = int(v_node.text)
+                row_cells[col_idx] = shared_strings[idx] if idx < len(shared_strings) else ""
+            else:
+                row_cells[col_idx] = v_node.text
+        if row_cells:
+            max_col = max(row_cells.keys()) + 1
+            rows_data.append([row_cells.get(i, "") for i in range(max_col)])
+
+    if not rows_data:
+        return None, "Empty sheet"
+
+    # Normalize row lengths
+    max_len = max(len(r) for r in rows_data)
+    rows_data = [r + [""] * (max_len - len(r)) for r in rows_data]
+
+    # First row as header
+    headers = [str(h) if h else f"Col_{i}" for i, h in enumerate(rows_data[0])]
+    df = pd.DataFrame(rows_data[1:], columns=headers)
+
+    # Auto-convert numeric columns
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except (ValueError, TypeError):
+            pass
+
+    # Replace empty strings with NaN
+    df = df.replace("", pd.NA)
+    return df, None
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -234,36 +313,45 @@ def load_file(f):
                 except UnicodeDecodeError:
                     continue
 
-        elif fname.endswith((".xlsx", ".xls")):
-            # Try multiple engines in order
-            loaded = False
-            for engine in ["openpyxl", None, "xlrd"]:
+        elif fname.endswith(".xlsx"):
+            # Try native parser first (no dependencies)
+            df, err = parse_xlsx_native(raw)
+            if df is None:
+                # Fallback to pandas
                 try:
                     buf.seek(0)
-                    kwargs = {"na_values": ["NA","N/A","","missing"]}
-                    if engine:
-                        kwargs["engine"] = engine
-                    df = pd.read_excel(buf, **kwargs)
-                    loaded = True
-                    break
-                except Exception:
-                    continue
+                    df = pd.read_excel(buf, na_values=["NA","N/A","","missing"])
+                except Exception as ex:
+                    st.error(f"⚠️ Could not read XLSX: {ex}. Try saving as CSV.")
+                    return None
+
+        elif fname.endswith(".xls"):
+            # .xls: try pandas first, then HTML fallback
+            loaded = False
+            try:
+                buf.seek(0)
+                df = pd.read_excel(buf, na_values=["NA","N/A","","missing"])
+                loaded = True
+            except Exception:
+                pass
 
             if not loaded:
-                # Last resort: try reading as HTML table (many .xls are HTML-based)
+                # Many .xls files are HTML-based Excel
                 try:
-                    buf.seek(0)
                     content = raw.decode("latin-1")
                     tables = pd.read_html(io.StringIO(content))
                     if tables:
-                        df = tables[0]
+                        df = max(tables, key=len)
                         loaded = True
                 except Exception:
                     pass
 
             if not loaded:
-                st.error("⚠️ Could not read this Excel file. Please open it in Excel → **Save As → .xlsx** or **CSV** and re-upload.")
-                return None
+                # Try reading as xlsx (some .xls are actually xlsx)
+                df, err = parse_xlsx_native(raw)
+                if df is None:
+                    st.error("⚠️ Could not read XLS file. Please open in Excel → Save As → **.xlsx** or **CSV**.")
+                    return None
 
         elif fname.endswith(".json"):
             try:
