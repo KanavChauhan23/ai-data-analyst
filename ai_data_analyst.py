@@ -673,8 +673,16 @@ if st.session_state.df is not None:
         if nc:
             for col in nc[:3]:
                 with st.expander(f"📊 Distribution · {col}", expanded=False):
-                    bins = pd.cut(df[col].dropna(), bins=20).value_counts().sort_index()
-                    st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
+                    try:
+                        col_data = df[col].dropna()
+                        if len(col_data) >= 2 and col_data.nunique() >= 2:
+                            n_bins = min(20, col_data.nunique())
+                            bins = pd.cut(col_data, bins=n_bins).value_counts().sort_index()
+                            st.bar_chart(pd.DataFrame({"count":bins.values}, index=bins.index.astype(str)))
+                        else:
+                            st.info("Not enough data to plot.")
+                    except Exception:
+                        st.info("Cannot plot this column.")
         if cc:
             for col in cc[:2]:
                 if df[col].nunique() <= 20:
