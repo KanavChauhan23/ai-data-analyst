@@ -546,7 +546,7 @@ with st.sidebar:
 
 # ─── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""<div class="hero">
-    <div class="hero-tag">⚡ POWERED BY GROQ AI · LLAMA 3.3 70B · REAL-TIME ANALYSIS</div>
+    <div class="hero-tag">⚡ POWERED BY GROQ AI · LLAMA 3.3 70B · DEVELOPED BY KANAV CHAUHAN</div>
     <h1 class="hero-title">NOVA DATA ANALYST</h1>
     <div class="hero-sub">Upload any dataset. Ask anything in plain English.<br>Get instant analysis, charts &amp; AI insights.</div>
 </div><div class="hero-line"></div>""", unsafe_allow_html=True)
@@ -561,7 +561,7 @@ st.markdown('<div class="sh"><div class="sh-icon">📂</div><div class="sh-title
 
 up1, up2 = st.columns([3,1])
 with up1:
-    uploaded = st.file_uploader("Upload Dataset", type=["csv","xlsx","xls","json"], label_visibility="collapsed")
+    uploaded = st.file_uploader("Upload Dataset", type=["csv","xlsx","json"], label_visibility="collapsed")
 with up2:
     st.markdown("""<div style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.1);border-radius:10px;padding:.9rem;font-size:.75rem;color:#7986A3;line-height:1.7;margin-top:.1rem;">
     📎 <b style="color:#00E5FF">Formats:</b><br>CSV · Excel · JSON<br><span style="font-size:.65rem;color:#3D4A5C">Max ~200MB</span></div>""", unsafe_allow_html=True)
@@ -850,6 +850,6 @@ else:
 st.markdown("""<div style="text-align:center;padding:2rem 0 .5rem;">
     <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,255,.3),rgba(168,85,247,.3),transparent);margin-bottom:1rem;"></div>
     <div style="font-family:'Space Mono',monospace;font-size:.5rem;letter-spacing:.3em;color:#2D3550;">
-        NOVA · AI DATA INTELLIGENCE · GROQ + LLaMA 3.3 70B &nbsp;|&nbsp; VERIFY AI-GENERATED RESULTS BEFORE CRITICAL DECISIONS
+        NOVA · AI DATA INTELLIGENCE &nbsp;|&nbsp; DEVELOPED BY KANAV CHAUHAN &nbsp;|&nbsp; GROQ + LLaMA 3.3 70B &nbsp;|&nbsp; VERIFY RESULTS BEFORE CRITICAL DECISIONS
     </div>
 </div>""", unsafe_allow_html=True)
