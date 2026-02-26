@@ -687,8 +687,13 @@ if st.session_state.df is not None:
             for col in cc[:2]:
                 if df[col].nunique() <= 20:
                     with st.expander(f"🏷️ Top Values · {col}", expanded=False):
-                        vc = df[col].value_counts().head(12)
-                        st.bar_chart(pd.DataFrame({"count":vc.values}, index=vc.index))
+                        try:
+                            vc = df[col].dropna().value_counts().head(12)
+                            if len(vc) > 0:
+                                idx = vc.index.astype(str).str[:40].str.replace(r"[^\w\s-]", "", regex=True)
+                                st.bar_chart(pd.DataFrame({"count":vc.values}, index=idx))
+                        except Exception:
+                            st.info("Cannot plot this column.")
         if len(nc) >= 2:
             with st.expander("🔗 Numeric Correlation Matrix", expanded=False):
                 try:
